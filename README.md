@@ -41,7 +41,7 @@ Useful options:
 ```text
 --backend rvm            default; faster video-native CUDA backend
 --backend rembg          older frame-by-frame image segmentation backend
---codec prores           default; ProRes 4444 alpha, much smaller than qtrle
+--codec prores           default; high-quality ProRes 4444 alpha
 --codec qtrle            huge QuickTime Animation alpha output
 --max-width 960          faster preview/output width; default is source size
 --rvm-downsample-ratio 0.125
@@ -59,7 +59,8 @@ Useful options:
 ## Notes
 
 - Output uses ProRes 4444 with alpha because Resolve imports it reliably and it
-  is much smaller than QuickTime Animation (`qtrle`).
+  is much smaller than QuickTime Animation (`qtrle`). The default ProRes encode
+  uses `-qscale:v 12 -alpha_bits 8`.
 - RVM files live in `C:\dev\tools\_models\remove-portrait`, created by
   `deps.ps1`. Model/source files are kept out of the repo.
 - The `rembg` backend can use `onnxruntime-gpu`; RVM uses PyTorch CUDA.

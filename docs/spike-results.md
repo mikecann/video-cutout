@@ -6,7 +6,7 @@ This records the options tested before settling on the current tool shape.
 
 - Backend: RobustVideoMatting (RVM), MobileNetV3 weights.
 - Device: PyTorch CUDA.
-- Output: full-frame ProRes 4444 `.mov` with alpha.
+- Output: full-frame ProRes 4444 `.mov` with alpha, using q12 and 8-bit alpha.
 - Dimensions: preserve the source frame size by default.
 - Cropping: not used. The camera layer should stay full-frame so movement
   inside the shot does not change positioning in Resolve.
@@ -19,7 +19,8 @@ does not require a manual first-frame mask.
 Results from the test clips:
 
 - `test.mkv`, 3840x2160, 21.44s: about 78s runtime with ProRes 4444 output.
-- `test.mkv`, full-size ProRes 4444 output: about 852 MB.
+- `test.mkv`, full-size ProRes 4444 q12 output: about 510 MB.
+- Earlier q9/16-bit-alpha output for the same clip was about 852 MB.
 - `09-39-33-cam.mkv`, first 60s, 3840x2160: about 3m26s runtime.
 - `09-39-33-cam.mkv`, first 60s ProRes 4444 output: about 2.33 GiB.
 
@@ -43,11 +44,22 @@ tuning, but it is no longer the default.
 ProRes 4444 kept alpha, imported in Resolve, and was much smaller:
 
 - 3s full-size sample: about 114 MB.
-- 21.44s full-size `test.mkv`: about 852 MB.
+- 21.44s full-size `test.mkv`, q12 and 8-bit alpha: about 510 MB.
+- 21.44s full-size `test.mkv`, q20 and 8-bit alpha: about 399 MB.
+- 21.44s full-size `test.mkv`, q30 and 8-bit alpha: about 339 MB.
+
+The q12 setting was chosen because the quality difference from the earlier
+larger ProRes output was subtle, but it still cut the sample from about 852 MB
+to about 510 MB.
 
 The files are still large because alpha video needs RGB plus transparency in an
 editing codec. Filmora likely keeps AI portrait as a timeline effect and exports
 the final composited MP4, so it does not always create a 4K alpha intermediate.
+
+VP9 WebM alpha was tiny, around 27 MB for the full `test.mkv` sample, but
+DaVinci Resolve imported it without alpha. FFmpeg could read the alpha only
+when forced through the libvpx-vp9 decoder, so it was rejected as a Resolve
+workflow default.
 
 ## MatAnyone / MatAnyone2
 

@@ -16,6 +16,8 @@ from rembg import new_session, remove
 DEFAULT_MODEL = "u2net_human_seg"
 DEFAULT_BACKEND = "rvm"
 DEFAULT_CODEC = "prores"
+DEFAULT_PRORES_QSCALE = 12
+DEFAULT_PRORES_ALPHA_BITS = 8
 DEFAULT_MAX_WIDTH = 0
 DEFAULT_SHRINK = 1
 DEFAULT_BLUR = 1.0
@@ -204,7 +206,18 @@ def build_raw_alpha_mov_command(
     if codec == "qtrle":
         command.extend(["-c:v", "qtrle", "-pix_fmt", "argb"])
     elif codec == "prores":
-        command.extend(["-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le", "-qscale:v", "9"])
+        command.extend([
+            "-c:v",
+            "prores_ks",
+            "-profile:v",
+            "4",
+            "-pix_fmt",
+            "yuva444p10le",
+            "-qscale:v",
+            str(DEFAULT_PRORES_QSCALE),
+            "-alpha_bits",
+            str(DEFAULT_PRORES_ALPHA_BITS),
+        ])
     else:
         raise ValueError(f"Unsupported alpha codec: {codec}")
 

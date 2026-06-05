@@ -116,6 +116,8 @@ class RemovePortraitTests(unittest.TestCase):
 
         self.assertIn("prores_ks", command)
         self.assertIn("yuva444p10le", command)
+        self.assertEqual("12", command[command.index("-qscale:v") + 1])
+        self.assertEqual("8", command[command.index("-alpha_bits") + 1])
         self.assertIn("1:a?", command)
         self.assertIn("-t", command)
         self.assertIn("60.000000", command)
