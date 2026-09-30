@@ -1,4 +1,4 @@
-# remove-portrait spike results
+# video-cutout spike results
 
 This records the options tested before settling on the current tool shape.
 

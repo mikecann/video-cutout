@@ -1,0 +1,2 @@
+# Pure logic tests and CLI help need no inference runtime or model downloads.
+pillow

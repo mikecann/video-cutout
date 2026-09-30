@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -8,9 +9,7 @@ import tempfile
 import time
 from pathlib import Path
 
-import cv2
 from PIL import Image, ImageDraw, ImageFilter
-from rembg import new_session, remove
 
 
 DEFAULT_MODEL = "u2net_human_seg"
@@ -22,9 +21,9 @@ DEFAULT_MAX_WIDTH = 0
 DEFAULT_SHRINK = 1
 DEFAULT_BLUR = 1.0
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".ts", ".mts", ".m2ts", ".flv", ".f4v"}
-RVM_MODEL_DIR = Path(r"C:\dev\tools\_models\remove-portrait")
-RVM_REPO = RVM_MODEL_DIR / "RobustVideoMatting"
-RVM_WEIGHTS = RVM_MODEL_DIR / "rvm_mobilenetv3.pth"
+RVM_MODEL_DIR = Path(r"C:\dev\tools\_models\video-cutout")
+# Reuse an existing download after the command rename. New installs use the new name.
+LEGACY_RVM_MODEL_DIR = Path(r"C:\dev\tools\_models\remove-portrait")
 
 
 def preload_onnxruntime_gpu_dlls() -> None:
@@ -44,11 +43,13 @@ def preload_onnxruntime_gpu_dlls() -> None:
 
 
 def find_ffmpeg() -> Path:
-    exe_dir = Path(__file__).resolve().parents[2]
-    candidates = [
+    candidates = []
+    if os.environ.get("EXEDIR"):
+        candidates.append(Path(os.environ["EXEDIR"]) / "ffmpeg.exe")
+    candidates.extend([
+        Path(__file__).resolve().parent / "ffmpeg.exe",
         Path(r"C:\dev\tools\ffmpeg.exe"),
-        exe_dir / "ffmpeg.exe",
-    ]
+    ])
     for candidate in candidates:
         if candidate.exists():
             return candidate
@@ -60,7 +61,7 @@ def find_ffmpeg() -> Path:
     raise FileNotFoundError("ffmpeg.exe was not found. Put it in C:\\dev\\tools or on PATH.")
 
 
-def build_default_output_path(input_path: Path, max_width: int, suffix: str = "_portrait_removed") -> Path:
+def build_default_output_path(input_path: Path, max_width: int, suffix: str = "_cutout") -> Path:
     width_part = f"_{max_width}w" if max_width > 0 else ""
     candidate = input_path.with_name(f"{input_path.stem}{suffix}{width_part}.mov")
     if not candidate.exists():
@@ -247,6 +248,10 @@ def process_frames(
     limit_seconds: float | None,
     alpha_matting: bool,
 ) -> tuple[int, float]:
+    # Load inference dependencies only when processing, so tests and --help stay light.
+    import cv2
+    from rembg import new_session, remove
+
     session = new_session(model)
     providers = get_session_providers(session)
     if providers:
@@ -323,26 +328,31 @@ def process_frames(
     return count, fps
 
 
-def ensure_rvm_available() -> None:
-    if not RVM_REPO.exists() or not RVM_WEIGHTS.exists():
-        raise RuntimeError(
-            "RobustVideoMatting files are missing. Run tools\\remove-portrait\\deps.ps1 first."
-        )
+def ensure_rvm_available() -> tuple[Path, Path]:
+    for model_dir in (RVM_MODEL_DIR, LEGACY_RVM_MODEL_DIR):
+        repo = model_dir / "RobustVideoMatting"
+        weights = model_dir / "rvm_mobilenetv3.pth"
+        if repo.is_dir() and weights.is_file():
+            return repo, weights
+    raise RuntimeError(
+        "RobustVideoMatting files are missing. Run .\\deps.ps1 first."
+    )
 
 
 def load_rvm_model(device, dtype):
-    ensure_rvm_available()
-    sys.path.insert(0, str(RVM_REPO))
+    repo, weights = ensure_rvm_available()
+    sys.path.insert(0, str(repo))
     from model import MattingNetwork
     import torch
 
     model = MattingNetwork("mobilenetv3").eval().to(device=device, dtype=dtype)
-    state = torch.load(RVM_WEIGHTS, map_location=device)
+    state = torch.load(weights, map_location=device)
     model.load_state_dict(state)
     return model
 
 
 def rvm_frames_to_tensor(frames_bgr, device, dtype):
+    import cv2
     import numpy as np
     import torch
 
@@ -353,6 +363,7 @@ def rvm_frames_to_tensor(frames_bgr, device, dtype):
 
 
 def rvm_frame_to_rgba(frame_bgr, pha, index: int) -> bytes:
+    import cv2
     import numpy as np
 
     rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
@@ -372,6 +383,7 @@ def process_rvm_video(
     chunk_size: int,
     codec: str,
 ) -> int:
+    import cv2
     import torch
 
     if not torch.cuda.is_available():
@@ -482,7 +494,7 @@ def process_rvm_video(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Remove the background from a talking-head video and write a transparent MOV.")
+    parser = argparse.ArgumentParser(prog="video-cutout", description="Remove the background from a talking-head video and write a transparent MOV.")
     parser.add_argument("video", type=Path, help="Input video file")
     parser.add_argument("-o", "--output", type=Path, help="Output .mov path")
     parser.add_argument("--backend", default=DEFAULT_BACKEND, choices=["rvm", "rembg"], help="Matting backend")
@@ -540,7 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             print("Done.")
             return 0
 
-        with tempfile.TemporaryDirectory(prefix="remove-portrait-") as temp:
+        with tempfile.TemporaryDirectory(prefix="video-cutout-") as temp:
             frame_dir = Path(temp) / "alpha"
             print("Removing portrait background...")
             print(f"Input:  {input_path}")
